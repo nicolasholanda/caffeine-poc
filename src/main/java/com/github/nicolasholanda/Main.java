@@ -1,39 +1,124 @@
 package com.github.nicolasholanda;
 
 import java.time.Duration;
+import java.util.Arrays;
 import java.util.Date;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 
+import com.github.benmanes.caffeine.cache.AsyncLoadingCache;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
+import com.github.benmanes.caffeine.cache.LoadingCache;
 import com.github.nicolasholanda.model.Student;
+import com.github.nicolasholanda.service.StudentService;
 
+import lombok.extern.log4j.Log4j2;
+
+@Log4j2
 public class Main {
 
-    private static Cache<String, Student> cache = buildCache();
+    // Using a service to mimic a real student service
+    private static StudentService studentService = new StudentService();
 
     public static void main(String[] args) {
-        Student student;
+        log.info("Starting simpleCacheDemo...");
+        simpleCacheDemo();
+        log.info("Finishing simpleCacheDemo...");
 
-        // Initially the cache is empty
-        student = cache.getIfPresent("1");
-        System.out.println("Student 1 when cache is empty: " + student);
-
-        // Explicitly populating cache
-        cache.put("1", new Student("John Doe", new Date()));
-        student = cache.getIfPresent("1");
-        System.out.println("Student 1 after cache is populated: " + student);
-
-        // Caffeine provides a simpler way to populate cache when object is not present
-        // in a single line
-        student = cache.get("2", key -> new Student("Foo Bar", new Date()));
-        System.out.println("Student 2 after cache is populated: " + student);
+        log.info("Starting synchronousLoadingCacheDemo...");
+        synchronousLoadingCacheDemo();
+        log.info("Finishing synchronousLoadingCacheDemo...");
+        
+        log.info("Starting asyncLoadingCacheDemo...");
+        asyncLoadingCacheDemo();
+        log.info("Finishing asyncLoadingCacheDemo...");
     }
 
-    // Builds a cache object using Caffeine's builder.
-    private static Cache<String, Student> buildCache() {
-        return Caffeine.newBuilder()
+    private static void simpleCacheDemo() {
+        Student student;
+
+        // Builds a cache object using Caffeine's builder. 
+        Cache<Integer, Student> simpleCache = Caffeine.newBuilder()
                 .maximumSize(10)
                 .expireAfterWrite(Duration.ofSeconds(20))
                 .build();
+
+        // Initially the cache is empty
+        student = simpleCache.getIfPresent(1);
+        log.info("Student 1 when cache is empty: {}", student);
+
+        // Explicitly populating cache
+        simpleCache.put(1, new Student(1, "John Doe", new Date()));
+        student = simpleCache.getIfPresent(1);
+        log.info("Student 1 after cache is populated: {}", student);
+
+        // Get method can takes a fallback function to provide values when the value is not present
+        student = simpleCache.get(2, key -> new Student(2, "Foo Bar", new Date()));
+        log.info("Student 2 after defining a fallback value for get method: {}", student);
+    }
+
+    private static void synchronousLoadingCacheDemo() {
+        /* A Synchronous Loading cache takes a function to be used for initializing values.
+         * In this case, when a student is not found in cache, Caffeine will load it from StudentService.
+         * That approach is similar to providing a fallback function to the cache.get method.
+        */
+        LoadingCache<Integer, Student> loadingCache = Caffeine.newBuilder()
+            .maximumSize(10)
+            .expireAfterWrite(Duration.ofSeconds(20))
+            .build(id -> studentService.findById(id));
+        
+        /* 
+         * Let's retrive a student from cache. In the first time, Caffeine will take a long time 
+         * because it will load from studentService.
+        */
+        Student student;
+        int studentId = 1;
+        
+        long initialTime = System.currentTimeMillis();
+        student = loadingCache.get(studentId);
+        long finalTime = System.currentTimeMillis();
+
+        log.info("Student {} took {} ms to be retrieved from cache: {}", studentId, (finalTime - initialTime), student);
+
+        // Second retrieval must take less time
+        initialTime = System.currentTimeMillis();
+        student = loadingCache.get(studentId);
+        finalTime = System.currentTimeMillis();
+
+        log.info("Student {} took {} ms to be retrieved from cache: {}", studentId, (finalTime - initialTime), student);
+
+        // It's also possible to search multiple students at once.
+        Map<Integer, Student> foundStudents = loadingCache.getAll(Arrays.asList(studentId, studentId + 1));
+        log.info("Found students for getAll method: {}", foundStudents);
+    }
+
+    private static void asyncLoadingCacheDemo() {
+        /* Async loading cache works similarly to the loading cache, the difference is that
+         * it returns a CompletableFuture holding the value.
+         */
+        AsyncLoadingCache<Integer, Student> asyncLoadingCache = Caffeine.newBuilder()
+            .maximumSize(10)
+            .expireAfterWrite(Duration.ofSeconds(20))
+            .buildAsync(id -> studentService.findById(id));
+
+        /* 
+         * Let's retrive a student from cache. The resulting object will be contained in a future
+        */
+        CompletableFuture<Student> studentFuture;
+        
+        int studentId = 1;
+        studentFuture = asyncLoadingCache.get(studentId);
+
+        Student student = null;
+        try {
+            student = studentFuture.get();
+        } catch (InterruptedException | ExecutionException e) {
+            e.printStackTrace();
+        }
+        
+        log.info("Student was asynchronously retrieved. Result: {}", student);
     }
 }
