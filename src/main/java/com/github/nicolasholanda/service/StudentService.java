@@ -1,8 +1,6 @@
 package com.github.nicolasholanda.service;
 
 import java.util.Date;
-import java.util.HashMap;
-import java.util.Map;
 
 import com.github.nicolasholanda.model.Student;
 
