@@ -38,6 +38,10 @@ public class Main {
         log.info("Starting sizeBasedEvictionDemo...");
         sizeBasedEvictionDemo();
         log.info("Finishing sizeBasedEvictionDemo...");
+
+        log.info("Starting weightBasedEvictionDemo...");
+        weightBasedEvictionDemo();
+        log.info("Finishing weightBasedEvictionDemo...");
     }
 
     private static void simpleCacheDemo() {
@@ -166,5 +170,51 @@ public class Main {
         cache.cleanUp();
 
         log.info("Cache size after size-based eviction: {}", cache.estimatedSize());
+    }
+
+    private static void weightBasedEvictionDemo() {
+        /*
+         * Sometimes, entries might have different costs in cache storage. For that, we
+         * may introduce a weigher function to calculate weight of an entry and specify
+         * maximumWeight to enable weight-based eviction.
+         * When adding an entry, Caffeine checks if it will exceed the maximumWeight.
+         * If it does, then entries will be evicted to make room for the new entry.
+         * Entries less frequently used (LFU) are prioritized for eviction.
+         * If the new entry itself has cost greater than maximumCost, it will not be
+         * added to cache at all.
+         */
+        LoadingCache<Integer, Student> cache = Caffeine.newBuilder()
+                .maximumWeight(20)
+                .weigher((Integer id, Student student) -> id * 5) // Weight of a student will be its id multiplied by 5
+                .removalListener((id, student, cause) -> log.info("Evicted student with id {} due to {}", id, cause))
+                .build(id -> studentService.findById(id));
+
+        // Initial size should be 0
+        log.info("Initial cache size: {}", cache.estimatedSize());
+
+        // Add an entry with cost 5.
+        cache.get(1);
+        log.info("Cache size after getting first student: {}", cache.estimatedSize());
+
+        /*
+         * Now cache weight will increase by 20, reaching a total of 25, thus
+         * first entry should be evicted to make room for this new entry.
+         */
+        cache.get(4);
+        cache.cleanUp();
+
+        log.info("Cache size after weight-based eviction: {}", cache.estimatedSize());
+
+        // Cleaning all entries for the next test
+        cache.invalidateAll();
+        cache.cleanUp();
+
+        log.info("Cache was cleaned up. New size: {}", cache.estimatedSize());
+
+        // An entry with cost 25 (greater than maximumSize) should not be added at all.
+        cache.get(5);
+        cache.cleanUp();
+
+        log.info("Cache size after trying to add an entry with cost greater than max: {}", cache.estimatedSize());
     }
 }
