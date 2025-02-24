@@ -42,6 +42,10 @@ public class Main {
         log.info("Starting weightBasedEvictionDemo...");
         weightBasedEvictionDemo();
         log.info("Finishing weightBasedEvictionDemo...");
+        
+        log.info("Starting timeBasedEvictionDemo...");
+        timeBasedEvictionDemo();
+        log.info("Finishing timeBasedEvictionDemo...");
     }
 
     private static void simpleCacheDemo() {
@@ -216,5 +220,31 @@ public class Main {
         cache.cleanUp();
 
         log.info("Cache size after trying to add an entry with cost greater than max: {}", cache.estimatedSize());
+    }
+
+    private static void timeBasedEvictionDemo() {
+        /*
+         * Time-based eviction can be specified to happen based on:
+         * 1 - Last read - entry expires after period since its last read
+         * 2 - Last write - entry expires after period since its last write
+         * 3 - Custom - entry expires after a period since a custom calculated date
+         */
+        LoadingCache<Integer, Student> cache = Caffeine.newBuilder()
+                .expireAfterWrite(Duration.ofSeconds(1)) // Eviction based on write
+                .build(id -> studentService.findById(id));
+
+        // Add student 1 to cache
+        cache.get(1);
+        log.info("Cache size after getting one student: {}", cache.estimatedSize());
+
+        try {
+            Thread.sleep(1000); // Waits for 1 second
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+
+        cache.cleanUp();
+
+        log.info("Cache size after 1 second: {}", cache.estimatedSize());
     }
 }
