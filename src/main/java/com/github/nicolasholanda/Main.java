@@ -54,6 +54,10 @@ public class Main {
         log.info("Starting refreshAfterWriteDemo...");
         refreshAfterWriteDemo();
         log.info("Finished refreshAfterWriteDemo...");
+
+        log.info("Starting cacheStatsDemo");
+        cacheStatsDemo();
+        log.info("Finished cacheStatsDemo");
     }
 
     private static void simpleCacheDemo() {
@@ -305,5 +309,17 @@ public class Main {
         }
     
         log.info("Student after refresh: {}", cache.get(1)); // Should trigger refresh
+    }
+
+    private static void cacheStatsDemo() {
+        LoadingCache<Integer, Student> cache = Caffeine.newBuilder()
+                .maximumSize(10)
+                .recordStats() // Enables statistics
+                .build(id -> studentService.findById(id));
+    
+        cache.get(1); // Cache miss
+        cache.get(1); // Cache hit
+    
+        log.info("Cache Stats: {}", cache.stats()); // Shows hit/miss ratio, eviction count, etc.
     }    
 }
