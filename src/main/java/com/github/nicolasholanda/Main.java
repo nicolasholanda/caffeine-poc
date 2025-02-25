@@ -46,6 +46,10 @@ public class Main {
         log.info("Starting timeBasedEvictionDemo...");
         timeBasedEvictionDemo();
         log.info("Finishing timeBasedEvictionDemo...");
+
+        log.info("Starting referenceBasedEvictionDemo...");
+        referenceBasedEvictionDemo();
+        log.info("Finishing referenceBasedEvictionDemo...");
     }
 
     private static void simpleCacheDemo() {
@@ -246,5 +250,40 @@ public class Main {
         cache.cleanUp();
 
         log.info("Cache size after 1 second: {}", cache.estimatedSize());
+    }
+
+    public static void referenceBasedEvictionDemo() {
+        LoadingCache<Integer, Student> cache = Caffeine.newBuilder()
+            .weakKeys()      // Evicts entries when keys are no longer referenced
+            .softValues()    // Evicts values under memory pressure
+            .removalListener((id, value, cause) -> log.info("Evicted student with id {} due to {}", id, cause))
+            .build(id -> studentService.findById(id));
+
+        // Create a key with a strong reference
+        Integer strongKey = 1;
+        cache.get(strongKey);
+
+        // Create a weakly referenced key
+        Integer weakKey = 2;
+        cache.get(weakKey);
+
+        log.info("Before GC: {}", cache.estimatedSize());
+
+        // Remove strong reference to weakKey, making it eligible for GC
+        weakKey = null;
+
+        // Suggest the JVM to run garbage collection
+        System.gc();
+
+        try {
+            Thread.sleep(1000);  // Wait a bit for GC to complete
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+
+        log.info("After GC (it might still the same): {}", cache.estimatedSize());
+
+        // strongKey should still be in the cache, but weakKey should be evicted
+        log.info("Contains strongKey? " + (cache.getIfPresent(strongKey) != null));
     }
 }
