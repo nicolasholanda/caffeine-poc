@@ -50,6 +50,10 @@ public class Main {
         log.info("Starting referenceBasedEvictionDemo...");
         referenceBasedEvictionDemo();
         log.info("Finishing referenceBasedEvictionDemo...");
+
+        log.info("Starting refreshAfterWriteDemo...");
+        refreshAfterWriteDemo();
+        log.info("Finished refreshAfterWriteDemo...");
     }
 
     private static void simpleCacheDemo() {
@@ -286,4 +290,20 @@ public class Main {
         // strongKey should still be in the cache, but weakKey should be evicted
         log.info("Contains strongKey? " + (cache.getIfPresent(strongKey) != null));
     }
+
+    private static void refreshAfterWriteDemo() {
+        LoadingCache<Integer, Student> cache = Caffeine.newBuilder()
+                .refreshAfterWrite(Duration.ofSeconds(5)) // Auto-refresh every 5 seconds
+                .build(id -> studentService.findById(id));
+    
+        log.info("Initial student: {}", cache.get(1));
+    
+        try {
+            Thread.sleep(6000); // Wait for 6 seconds to allow refresh
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+    
+        log.info("Student after refresh: {}", cache.get(1)); // Should trigger refresh
+    }    
 }
